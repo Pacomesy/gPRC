@@ -41,6 +41,20 @@ namespace NIVISAClient
 
                 Console.WriteLine();
 
+                client.SetAttribute(new SetAttributeRequest
+                {
+                    Vi = openReply.Vi,
+                    AttributeName = VisaAttribute.TermcharEn,
+                    AttributeValue = new AttributeValueData { ValueBool = true }
+                });
+
+                client.SetAttribute(new SetAttributeRequest
+                {
+                    Vi = openReply.Vi,
+                    AttributeName = VisaAttribute.Termchar,
+                    AttributeValue = new AttributeValueData { ValueU8 = 0x0A }
+                });
+
                 // Read baud rate before change
                 uint baudBefore = GetBaudRate(client, openReply.Vi);
                 Console.WriteLine($"Baud rate before change: {baudBefore}");
