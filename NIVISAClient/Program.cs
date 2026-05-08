@@ -9,7 +9,7 @@ namespace NIVISAClient
 {
     internal class Program
     {
-        static void Main(string[] args)
+        static void Main()
         {
             var serverAddress = "localhost";
             var serverPort = "31763";
@@ -45,6 +45,13 @@ namespace NIVISAClient
                 {
                     Vi = openReply.Vi,
                     AttributeName = VisaAttribute.TermcharEn,
+                    AttributeValue = new AttributeValueData { ValueBool = true }
+                });
+
+                client.SetAttribute(new SetAttributeRequest
+                {
+                    Vi = openReply.Vi,
+                    AttributeName = VisaAttribute.SendEndEn,
                     AttributeValue = new AttributeValueData { ValueBool = true }
                 });
 
