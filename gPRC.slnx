@@ -1,4 +1,6 @@
 <Solution>
+  <Project Path="DAQmxClient/DAQmxClient.csproj" Id="f408080d-654c-4fac-ad68-4bfedbcf1bc0" />
+  <Project Path="DAQmxProto/DAQmxProto.csproj" Id="d87e9aab-5f9a-4f0b-9085-22ab36bdddbb" />
   <Project Path="NIDCPowerClient/NIDCPowerClient.csproj" Id="6f12f9d0-b465-4fa9-9ac1-2bdb4a00254a" />
   <Project Path="NIDCPowerProto/NIDCPowerProto.csproj" Id="de82d990-9ad0-4463-af1f-2c4c16b78d90" />
   <Project Path="NIVISAClient/NIVISAClient.csproj" />

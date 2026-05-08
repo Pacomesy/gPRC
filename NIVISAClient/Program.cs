@@ -21,23 +21,30 @@ namespace NIVISAClient
             Channel channel = new Channel(serverAddress + ":" + serverPort, ChannelCredentials.Insecure);
             var client = new Visa.VisaClient(channel);
 
-            var findReply = client.FindRsrc(new FindRsrcRequest { Expression = "GPIB1::?*::INSTR" });
-            if (findReply.Status != 0)
+            try
             {
-                Console.WriteLine($"FindRsrc failed with status: {findReply.Status}");
-            }
-            else if (findReply.InstrumentDescriptor.Count == 0)
-            {
-                Console.WriteLine("No instruments found on GPIB0.");
-            }
-            else
-            {
-                Console.WriteLine($"Found {findReply.InstrumentDescriptor.Count} instrument(s) on GPIB0:");
-                foreach (var descriptor in findReply.InstrumentDescriptor)
+                var findReply = client.FindRsrc(new FindRsrcRequest { Expression = "GPIB1::?*::INSTR" });
+                if (findReply.Status != 0)
                 {
-                    Console.WriteLine($"  {descriptor}");
-                    QueryIdn(client, descriptor);
+                    Console.WriteLine($"FindRsrc failed with status: {findReply.Status}");
                 }
+                else if (findReply.InstrumentDescriptor.Count == 0)
+                {
+                    Console.WriteLine("No instruments found on GPIB0.");
+                }
+                else
+                {
+                    Console.WriteLine($"Found {findReply.InstrumentDescriptor.Count} instrument(s) on GPIB0:");
+                    foreach (var descriptor in findReply.InstrumentDescriptor)
+                    {
+                        Console.WriteLine($"  {descriptor}");
+                        QueryIdn(client, descriptor);
+                    }
+                }
+            }
+            catch (Exception ex) 
+            {
+                Console.WriteLine(ex);
             }
             Console.WriteLine();
 
