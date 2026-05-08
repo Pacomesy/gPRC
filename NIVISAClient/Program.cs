@@ -21,7 +21,7 @@ namespace NIVISAClient
             Channel channel = new Channel(serverAddress + ":" + serverPort, ChannelCredentials.Insecure);
             var client = new Visa.VisaClient(channel);
 
-            var findReply = client.FindRsrc(new FindRsrcRequest { Expression = "GPIB0::?*::INSTR" });
+            var findReply = client.FindRsrc(new FindRsrcRequest { Expression = "GPIB1::?*::INSTR" });
             if (findReply.Status != 0)
             {
                 Console.WriteLine($"FindRsrc failed with status: {findReply.Status}");
