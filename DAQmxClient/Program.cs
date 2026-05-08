@@ -82,7 +82,7 @@ namespace DAQmxClient
                     {
                         Task = task,
                         NumSampsPerChan = sampsPerRead,
-                        Timeout = 0.1,
+                        Timeout = 5.0,
                         FillMode = GroupBy.GroupByScanNumber,
                         ArraySizeInSamps = (uint)sampsPerRead
                     });
