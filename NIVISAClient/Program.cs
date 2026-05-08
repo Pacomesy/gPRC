@@ -52,7 +52,7 @@ namespace NIVISAClient
                 {
                     Vi = openReply.Vi,
                     AttributeName = VisaAttribute.SendEndEn,
-                    AttributeValue = new AttributeValueData { ValueBool = true }
+                    AttributeValue = new AttributeValueData { ValueBool = false }
                 });
 
                 client.SetAttribute(new SetAttributeRequest
@@ -62,40 +62,36 @@ namespace NIVISAClient
                     AttributeValue = new AttributeValueData { ValueU8 = 0x0A }
                 });
 
-                // Read baud rate before change
-                uint baudBefore = GetBaudRate(client, openReply.Vi);
-                Console.WriteLine($"Baud rate before change: {baudBefore}");
-                Console.WriteLine();
+                Console.Write("Enter string to send: ");
+                string message = Console.ReadLine();
 
-                // Prompt user for new baud rate
-                uint newBaud = 0;
-                while (newBaud == 0)
-                {
-                    Console.Write("Enter new baud rate: ");
-                    string input = Console.ReadLine();
-                    if (!uint.TryParse(input, out newBaud) || newBaud == 0)
-                    {
-                        Console.WriteLine("Invalid baud rate. Please enter a positive integer.");
-                        newBaud = 0;
-                    }
-                }
-
-                // Set new baud rate
-                var setReply = client.SetAttribute(new SetAttributeRequest
+                var writeReply = client.Write(new WriteRequest
                 {
                     Vi = openReply.Vi,
-                    AttributeName = VisaAttribute.AsrlBaud,
-                    AttributeValue = new AttributeValueData { ValueU32 = newBaud }
+                    Buffer = Google.Protobuf.ByteString.CopyFromUtf8(message + "\n")
                 });
 
-                if (setReply.Status != 0)
-                    Console.WriteLine($"SetAttribute failed with status: {setReply.Status}");
+                if (writeReply.Status != 0)
+                {
+                    Console.WriteLine($"Write failed with status: {writeReply.Status}");
+                }
+                else
+                {
+                    Console.WriteLine($"Sent {writeReply.ReturnCount} byte(s).");
 
-                // Read baud rate after change
-                uint baudAfter = GetBaudRate(client, openReply.Vi);
-                Console.WriteLine($"Baud rate after  change: {baudAfter}");
+                    var readReply = client.Read(new ReadRequest
+                    {
+                        Vi = openReply.Vi,
+                        Count = 4096
+                    });
+
+                    if (readReply.Status != 0)
+                        Console.WriteLine($"Read failed with status: {readReply.Status}");
+                    else
+                        Console.WriteLine($"Response: {readReply.Buffer.ToStringUtf8()}");
+                }
+
                 Console.WriteLine();
-
                 client.Close(new CloseRequest { Vi = openReply.Vi });
                 Console.WriteLine("COM1 closed.");
             }
@@ -132,24 +128,6 @@ namespace NIVISAClient
             {
                 Console.WriteLine("Warning: NI gRPC Device Server service not found — assuming server is already running.");
             }
-        }
-
-        static uint GetBaudRate(Visa.VisaClient client, NationalInstruments.Grpc.Device.Session vi)
-        {
-            var reply = client.GetAttribute(new GetAttributeRequest
-            {
-                Vi = vi,
-                AttributeName = VisaAttribute.AsrlBaud
-            });
-            if (reply.Status != 0)
-            {
-                Console.WriteLine($"  GetAttribute(AsrlBaud) error (status {reply.Status})");
-                return 0;
-            }
-            var val = reply.AttributeValue;
-            if (val.HasValueU32) return val.ValueU32;
-            if (val.HasValueU64) return (uint)val.ValueU64;
-            return 0;
         }
 
         static void PrintSerialAttribute(Visa.VisaClient client, NationalInstruments.Grpc.Device.Session vi, VisaAttribute attribute, string label)
