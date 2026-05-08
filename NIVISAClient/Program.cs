@@ -21,6 +21,23 @@ namespace NIVISAClient
             Channel channel = new Channel(serverAddress + ":" + serverPort, ChannelCredentials.Insecure);
             var client = new Visa.VisaClient(channel);
 
+            var findReply = client.FindRsrc(new FindRsrcRequest { Expression = "GPIB0::?*::INSTR" });
+            if (findReply.Status != 0)
+            {
+                Console.WriteLine($"FindRsrc failed with status: {findReply.Status}");
+            }
+            else if (findReply.InstrumentDescriptor.Count == 0)
+            {
+                Console.WriteLine("No instruments found on GPIB0.");
+            }
+            else
+            {
+                Console.WriteLine($"Found {findReply.InstrumentDescriptor.Count} instrument(s) on GPIB0:");
+                foreach (var descriptor in findReply.InstrumentDescriptor)
+                    Console.WriteLine($"  {descriptor}");
+            }
+            Console.WriteLine();
+
             var openReply = client.Open(new OpenRequest
             {
                 SessionName = sessionName,
