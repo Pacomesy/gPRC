@@ -34,7 +34,10 @@ namespace NIVISAClient
             {
                 Console.WriteLine($"Found {findReply.InstrumentDescriptor.Count} instrument(s) on GPIB0:");
                 foreach (var descriptor in findReply.InstrumentDescriptor)
+                {
                     Console.WriteLine($"  {descriptor}");
+                    QueryIdn(client, descriptor);
+                }
             }
             Console.WriteLine();
 
@@ -120,6 +123,62 @@ namespace NIVISAClient
             channel.ShutdownAsync().Wait();
             Console.WriteLine("Press any key to exit...");
             Console.ReadKey();
+        }
+
+        static void QueryIdn(Visa.VisaClient client, string descriptor)
+        {
+            var openReply = client.Open(new OpenRequest
+            {
+                SessionName = descriptor,
+                InstrumentDescriptor = descriptor,
+                OpenTimeout = 5000
+            });
+
+            if (openReply.Status != 0)
+            {
+                Console.WriteLine($"    Open failed with status: {openReply.Status}");
+                return;
+            }
+
+            client.SetAttribute(new SetAttributeRequest
+            {
+                Vi = openReply.Vi,
+                AttributeName = VisaAttribute.TermcharEn,
+                AttributeValue = new AttributeValueData { ValueBool = true }
+            });
+
+            client.SetAttribute(new SetAttributeRequest
+            {
+                Vi = openReply.Vi,
+                AttributeName = VisaAttribute.Termchar,
+                AttributeValue = new AttributeValueData { ValueU8 = 0x0A }
+            });
+
+            var writeReply = client.Write(new WriteRequest
+            {
+                Vi = openReply.Vi,
+                Buffer = Google.Protobuf.ByteString.CopyFromUtf8("*IDN?\n")
+            });
+
+            if (writeReply.Status != 0)
+            {
+                Console.WriteLine($"    Write failed with status: {writeReply.Status}");
+            }
+            else
+            {
+                var readReply = client.Read(new ReadRequest
+                {
+                    Vi = openReply.Vi,
+                    Count = 4096
+                });
+
+                if (readReply.Status != 0)
+                    Console.WriteLine($"    Read failed with status: {readReply.Status}");
+                else
+                    Console.WriteLine($"    IDN: {readReply.Buffer.ToStringUtf8().TrimEnd()}");
+            }
+
+            client.Close(new CloseRequest { Vi = openReply.Vi });
         }
 
         static void StartGrpcServerIfNeeded()
