@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  daqmx-webapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: daqmx-webapp:latest
+    container_name: daqmx-webapp
+    ports:
+      - "8080:8080"          # Accès web : http://localhost:8080
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+    # Permet au conteneur d'atteindre le NI gRPC Device Server sur la machine hôte
+    # via "host.docker.internal" (valeur par défaut dans l'interface web)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

@@ -1,0 +1,195 @@
+@page "/"
+@rendermode InteractiveServer
+@inject DAQmxService Daq
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>DAQmx — Configuration</PageTitle>
+
+<div class="page-grid">
+
+    <!-- ── LEFT PANEL : Configuration ──────────────────────────────── -->
+    <section class="panel panel-config">
+        <h2>⚙️ Configuration</h2>
+
+        <fieldset class="config-group" disabled="@IsRunning">
+            <legend>Serveur gRPC</legend>
+            <label>Adresse
+                <input type="text" @bind="Config.ServerAddress" />
+            </label>
+            <label>Port
+                <input type="number" @bind="Config.ServerPort" min="1" max="65535" />
+            </label>
+        </fieldset>
+
+        <fieldset class="config-group" disabled="@IsRunning">
+            <legend>Tâche DAQmx</legend>
+            <label>Nom de session
+                <input type="text" @bind="Config.SessionName" />
+            </label>
+            <label>Canal physique
+                <input type="text" @bind="Config.PhysicalChannel" placeholder="Dev1/ai0" />
+            </label>
+        </fieldset>
+
+        <fieldset class="config-group" disabled="@IsRunning">
+            <legend>Plage de tension</legend>
+            <label>Min (V)
+                <input type="number" @bind="Config.MinVoltage" step="0.1" />
+            </label>
+            <label>Max (V)
+                <input type="number" @bind="Config.MaxVoltage" step="0.1" />
+            </label>
+        </fieldset>
+
+        <fieldset class="config-group" disabled="@IsRunning">
+            <legend>Timing d'acquisition</legend>
+            <label>Fréquence d'échantillonnage (Hz)
+                <input type="number" @bind="Config.SampleRate" min="1" step="100" />
+            </label>
+            <label>Échantillons par lecture
+                <input type="number" @bind="Config.SampsPerRead" min="1" step="10" />
+            </label>
+            <label>Multiplicateur buffer
+                <input type="number" @bind="Config.BufferMultiplier" min="2" max="100" />
+            </label>
+        </fieldset>
+
+        <!-- ── Actions ── -->
+        <div class="action-bar">
+            @if (Daq.State == DAQmxState.Disconnected)
+            {
+                <button class="btn btn-connect" @onclick="ConnectAsync">🔌 Connecter</button>
+            }
+            else if (Daq.State == DAQmxState.Connected)
+            {
+                <button class="btn btn-start" @onclick="StartAsync">▶ Démarrer</button>
+                <button class="btn btn-disconnect" @onclick="DisconnectAsync">⏏ Déconnecter</button>
+            }
+            else if (Daq.State == DAQmxState.Running)
+            {
+                <button class="btn btn-stop" @onclick="StopAsync">⏹ Arrêter</button>
+            }
+        </div>
+
+        <!-- ── Status ── -->
+        <div class="status-bar @StatusClass">
+            <span class="status-dot"></span>
+            <span>@Daq.StatusMessage</span>
+        </div>
+    </section>
+
+    <!-- ── RIGHT PANEL : Live chart ─────────────────────────────────── -->
+    <section class="panel panel-chart">
+        <div class="chart-header">
+            <h2>📈 Signal en temps réel</h2>
+            <div class="chart-stats">
+                <span>Moyenne : <strong>@AvgVoltage.ToString("F4") V</strong></span>
+                <span>Min : <strong>@MinVoltage.ToString("F4") V</strong></span>
+                <span>Max : <strong>@MaxVoltage.ToString("F4") V</strong></span>
+                <span>Échantillons : <strong>@TotalSamples</strong></span>
+            </div>
+        </div>
+        <div class="chart-container">
+            <canvas id="daqChart"></canvas>
+        </div>
+    </section>
+
+</div>
+
+@code {
+    private DAQmxConfig Config { get; set; } = new();
+    private bool IsRunning => Daq.State == DAQmxState.Running;
+
+    // Rolling chart buffer (last N points displayed)
+    private const int MaxChartPoints = 500;
+    private readonly Queue<double> _chartBuffer = new();
+
+    // Live stats
+    private double AvgVoltage;
+    private double MinVoltage;
+    private double MaxVoltage;
+    private long TotalSamples;
+
+    private string StatusClass => Daq.State switch
+    {
+        DAQmxState.Running     => "status-running",
+        DAQmxState.Connected   => "status-connected",
+        _                      => "status-disconnected"
+    };
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+    protected override void OnInitialized()
+    {
+        Daq.StateChanged  += OnStateChanged;
+        Daq.DataReceived  += OnDataReceived;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("chartInterop.init", "daqChart");
+    }
+
+    // ── Event handlers ───────────────────────────────────────────────────────
+    private void OnStateChanged()
+        => InvokeAsync(StateHasChanged);
+
+    private void OnDataReceived(double[] samples, int count)
+    {
+        if (samples.Length == 0) return;
+
+        // Update rolling buffer
+        foreach (var v in samples)
+        {
+            _chartBuffer.Enqueue(v);
+            if (_chartBuffer.Count > MaxChartPoints)
+                _chartBuffer.Dequeue();
+        }
+
+        // Compute stats
+        TotalSamples += count;
+        AvgVoltage = samples.Average();
+        MinVoltage = samples.Min();
+        MaxVoltage = samples.Max();
+
+        // Push chart update (fire-and-forget on UI thread)
+        InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            await JS.InvokeVoidAsync("chartInterop.update", "daqChart", _chartBuffer.ToArray());
+        });
+    }
+
+    // ── Button handlers ──────────────────────────────────────────────────────
+    private async Task ConnectAsync()
+    {
+        await Daq.ConnectAsync(Config);
+    }
+
+    private async Task StartAsync()
+    {
+        _chartBuffer.Clear();
+        TotalSamples = 0;
+        AvgVoltage = MinVoltage = MaxVoltage = 0;
+        await Daq.StartAsync();
+    }
+
+    private async Task StopAsync()
+    {
+        await Daq.StopAsync();
+    }
+
+    private async Task DisconnectAsync()
+    {
+        await Daq.DisconnectAsync();
+    }
+
+    // ── Cleanup ──────────────────────────────────────────────────────────────
+    public async ValueTask DisposeAsync()
+    {
+        Daq.StateChanged -= OnStateChanged;
+        Daq.DataReceived -= OnDataReceived;
+        await Daq.DisconnectAsync();
+    }
+}
