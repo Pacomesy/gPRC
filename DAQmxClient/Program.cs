@@ -122,7 +122,7 @@ namespace DAQmxClient
 
         static void StartGrpcServerIfNeeded()
         {
-            const string serviceName = "nigrpcdeviceserver";
+            const string serviceName = "NI gRPC Server";
             try
             {
                 using (var svc = new ServiceController(serviceName))

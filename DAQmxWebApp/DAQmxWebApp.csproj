@@ -7,6 +7,11 @@
     <RootNamespace>DAQmxWebApp</RootNamespace>
   </PropertyGroup>
 
+  <!-- gRPC client sur http:// (sans TLS) = HTTP/2 cleartext : activé au démarrage du host (.NET) -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport" Value="true" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.63.0" />
     <PackageReference Include="Grpc.Net.Client" Version="2.63.0" />

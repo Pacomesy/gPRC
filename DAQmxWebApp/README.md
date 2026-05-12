@@ -14,6 +14,14 @@ Navigateur  ←─── Blazor Server (Docker) ←─── gRPC ─── NI g
 - L'application Blazor tourne dans un conteneur Docker for Windows.
 - L'interface web est accessible sur **http://localhost:8080**.
 - La connexion au serveur hôte se fait via `host.docker.internal`.
+- Le client gRPC utilise **`http://`** (sans TLS) vers NI : le runtime .NET doit autoriser **HTTP/2 en clair** (`RuntimeHostConfigurationOption` / `Http2UnencryptedSupport` dans le projet et `Program.cs`). Sans cela, vous obtiendrez une erreur du type *unable to establish HTTP/2 connection*.
+
+---
+
+## Dépannage
+
+- Après modification du code, si Docker semble encore servir l’ancienne version : `docker compose build --no-cache` puis `docker compose up`.
+- Erreur **HTTP/2** au premier appel RPC : vérifier que la dernière build est bien celle du dépôt (rebuild local ou image Docker reconstruite).
 
 ---
 

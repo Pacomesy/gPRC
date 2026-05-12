@@ -1,4 +1,6 @@
 using Grpc.Net.Client;
+using Grpc.Core;
+using System.Net.Http;
 using NationalInstruments.Grpc.NiDAQmx;
 using NationalInstruments.Grpc.Device;
 using DAQmxWebApp.Models;
@@ -21,6 +23,7 @@ public class DAQmxService : IDisposable
     public event Action? StateChanged;
 
     // ── Private gRPC members ─────────────────────────────────────────────────
+    private SocketsHttpHandler? _grpcHttpHandler;
     private GrpcChannel? _channel;
     private NiDAQmx.NiDAQmxClient? _client;
     private Session? _task;
@@ -34,27 +37,48 @@ public class DAQmxService : IDisposable
             await DisconnectAsync();
 
         Config = config;
+        const int connectTimeoutSeconds = 15;
         try
         {
+            _grpcHttpHandler?.Dispose();
+            _grpcHttpHandler = new SocketsHttpHandler
+            {
+                EnableMultipleHttp2Connections = true
+            };
             var options = new GrpcChannelOptions
             {
-                Credentials = Grpc.Core.ChannelCredentials.Insecure
+                Credentials = Grpc.Core.ChannelCredentials.Insecure,
+                HttpHandler = _grpcHttpHandler
             };
             _channel = GrpcChannel.ForAddress(config.GrpcAddress, options);
 
-            // Quick connectivity check (5 s timeout)
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(connectTimeoutSeconds));
             await _channel.ConnectAsync(cts.Token);
 
             _client = new NiDAQmx.NiDAQmxClient(_channel);
             SetState(DAQmxState.Connected, $"Connected to {config.ServerAddress}:{config.ServerPort}");
             return true;
         }
+        catch (OperationCanceledException)
+        {
+            // GrpcChannel.ConnectAsync uses the token for timeout; cancellation reads as "A task was canceled."
+            SetState(
+                DAQmxState.Disconnected,
+                $"Connection timed out after {connectTimeoutSeconds}s at {config.GrpcAddress}. " +
+                "Confirm the NI DAQmx gRPC server is running and the address/port match.");
+            _channel?.Dispose();
+            _channel = null;
+            _grpcHttpHandler?.Dispose();
+            _grpcHttpHandler = null;
+            return false;
+        }
         catch (Exception ex)
         {
             SetState(DAQmxState.Disconnected, $"Connection failed: {ex.Message}");
             _channel?.Dispose();
             _channel = null;
+            _grpcHttpHandler?.Dispose();
+            _grpcHttpHandler = null;
             return false;
         }
     }
@@ -69,7 +93,22 @@ public class DAQmxService : IDisposable
         }
 
         // Create task
-        var createReply = _client.CreateTask(new CreateTaskRequest { SessionName = Config.SessionName });
+        CreateTaskResponse createReply;
+        try
+        {
+            createReply = _client.CreateTask(new CreateTaskRequest { SessionName = Config.SessionName });
+        }
+        catch (RpcException ex)
+        {
+            SetState(State, $"Start failed (gRPC): {ex.Message}");
+            return false;
+        }
+        catch (HttpRequestException ex)
+        {
+            SetState(State, $"Start failed (HTTP): {ex.Message}");
+            return false;
+        }
+
         if (createReply.Status != 0)
         {
             SetState(State, $"CreateTask failed (status {createReply.Status}).");
@@ -157,6 +196,8 @@ public class DAQmxService : IDisposable
             _channel.Dispose();
             _channel = null;
         }
+        _grpcHttpHandler?.Dispose();
+        _grpcHttpHandler = null;
         _client = null;
         SetState(DAQmxState.Disconnected, "Disconnected.");
     }
@@ -217,5 +258,6 @@ public class DAQmxService : IDisposable
     {
         _readCts?.Cancel();
         _channel?.Dispose();
+        _grpcHttpHandler?.Dispose();
     }
 }
