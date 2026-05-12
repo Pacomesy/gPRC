@@ -174,13 +174,20 @@ public class DAQmxService : IDisposable
         if (State != DAQmxState.Running || _client is null || _task is null)
             return;
 
-        // Cancel read loop
+        // Stop the hardware task first – this unblocks any in-progress ReadAnalogF64 call immediately.
+        // Waiting for the read loop before stopping the task would cause a deadlock: the loop blocks in
+        // ReadAnalogF64 waiting for samples that never arrive because the task is still running.
+        try { _client.StopTask(new StopTaskRequest { Task = _task }); } catch { }
+
+        // Now signal the read loop and wait for it to exit (should be nearly instant after StopTask).
         _readCts?.Cancel();
         if (_readLoop is not null)
-            await _readLoop.ConfigureAwait(false);
-        _readLoop = null;
+        {
+            try { await _readLoop.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false); }
+            catch { }
+            _readLoop = null;
+        }
 
-        _client.StopTask(new StopTaskRequest { Task = _task });
         await ClearTaskAsync();
         SetState(DAQmxState.Connected, "Task stopped.");
     }
