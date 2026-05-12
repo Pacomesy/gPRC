@@ -15,4 +15,9 @@ services:
     # via "host.docker.internal" (valeur par défaut dans l'interface web)
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - dataprotection-keys:/root/.aspnet/DataProtection-Keys
     restart: unless-stopped
+
+volumes:
+  dataprotection-keys:
